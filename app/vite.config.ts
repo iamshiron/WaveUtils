@@ -5,6 +5,9 @@ import { TanStackRouterVite } from '@tanstack/router-vite-plugin';
 import path from 'path';
 
 export default defineConfig({
+    // Public base path. Defaults to '/'; CI sets VITE_BASE (e.g. '/WaveUtils/')
+    // for deployment to a GitHub Pages project site.
+    base: process.env.VITE_BASE ?? '/',
     plugins: [TanStackRouterVite(), tailwindcss(), react()],
     resolve: {
         alias: {

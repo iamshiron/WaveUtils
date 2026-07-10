@@ -2,6 +2,7 @@
     "name": "@shiron/wave-utils",
     "version": "0.0.0",
     "license": "MIT",
+    "packageManager": "pnpm@11.5.2",
     "scripts": {
         "lint": "nx run-many --target=lint --all",
         "format": "nx run-many --target=format --all && dotnet format",
