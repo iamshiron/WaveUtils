@@ -1,0 +1,4 @@
+[submodule "packages/ui"]
+	path = packages/ui
+	url = https://github.com/iamshiron/shiron-ui
+	branch = main

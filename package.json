@@ -1,0 +1,36 @@
+{
+    "name": "@shiron/wave-utils",
+    "version": "0.0.0",
+    "license": "MIT",
+    "scripts": {
+        "lint": "nx run-many --target=lint --all",
+        "format": "nx run-many --target=format --all && dotnet format",
+        "build": "nx run-many --target=build --all",
+        "dev": "nx run-many --target=dev,run --all",
+        "migrate": "nx run-many --target=migrate --all",
+        "clean": "nx run-many --target=clean --all"
+    },
+    "private": true,
+    "devDependencies": {
+        "@nx/dotnet": "22.6.1",
+        "@nx/js": "22.6.1",
+        "@nx/react": "22.6.1",
+        "@nx/vite": "22.6.1",
+        "@nx/web": "22.6.1",
+        "@swc-node/register": "1.11.1",
+        "@swc/core": "1.15.8",
+        "@swc/helpers": "0.5.18",
+        "@vitest/ui": "~4.0.0",
+        "jiti": "2.4.2",
+        "nx": "22.6.1",
+        "prettier": "^2.6.2",
+        "tslib": "^2.3.0",
+        "typescript": "~5.9.2",
+        "vite": "^7.0.0",
+        "vitest": "~4.0.0"
+    },
+    "dependencies": {
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0"
+    }
+}

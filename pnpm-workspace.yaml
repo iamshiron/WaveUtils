@@ -1,0 +1,8 @@
+packages:
+  - 'app'
+  - 'packages/*'
+allowBuilds:
+  '@swc/core': false
+  esbuild: false
+  msw: false
+  nx: false
