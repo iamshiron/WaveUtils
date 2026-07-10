@@ -1,3 +1,4 @@
+import { Button } from "@shiron/ui/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { ModeToggle } from "@/components/layout/ModeToggle";
 
@@ -23,7 +24,13 @@ export function AppShell({
 							</span>
 						</Link>
 					</div>
-					<nav className="justify-self-center" />
+					<nav className="justify-self-center">
+						<div className="flex items-center gap-1">
+							<Button variant="ghost" size="sm" asChild>
+								<Link to="/roll-calculator">Roll Calculator</Link>
+							</Button>
+						</div>
+					</nav>
 					<div className="flex items-center gap-1 justify-self-end">
 						<ModeToggle />
 					</div>

@@ -26,3 +26,7 @@ pnpm-debug.log*
 
 # env
 .env
+
+# local reference notes (symlink to personal wiki)
+docs
+docs/
