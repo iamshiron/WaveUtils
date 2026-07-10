@@ -11,7 +11,7 @@ export function AppShell({
 }) {
 	const maxWidth = wide ? "max-w-6xl" : "max-w-5xl";
 	return (
-		<div className="relative min-h-screen bg-background">
+		<div className="relative flex min-h-screen flex-col bg-background">
 			<header className={`sticky top-4 z-50 mx-auto w-full ${maxWidth} px-4`}>
 				<div className="glass grid h-12 grid-cols-[1fr_auto_1fr] items-center rounded-full border border-border pl-5 pr-2 shadow-sm">
 					<div className="justify-self-start">
@@ -37,10 +37,34 @@ export function AppShell({
 				</div>
 			</header>
 			<main
-				className={`mx-auto w-full px-4 py-10 ${wide ? "max-w-6xl" : "max-w-3xl"}`}
+				className={`mx-auto w-full flex-1 px-4 py-10 ${wide ? "max-w-6xl" : "max-w-3xl"}`}
 			>
 				{children}
 			</main>
+			<footer className={`mx-auto w-full ${maxWidth} px-4 py-8`}>
+				<p className="border-t border-border pt-6 text-center text-xs leading-relaxed text-muted-foreground">
+					<a
+						href="https://wutheringwaves.kurogames.com/en/main"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="underline underline-offset-2 transition-colors hover:text-foreground"
+					>
+						Wuthering Waves
+					</a>{" "}
+					is a trademark of{" "}
+					<a
+						href="https://www.kurogames.net/introduction"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="underline underline-offset-2 transition-colors hover:text-foreground"
+					>
+						Kuro Games
+					</a>
+					. WaveUtils is an unofficial, fan-made project and is not affiliated
+					with, endorsed by, or associated with Kuro Games. All game data and
+					related names are the property of their respective owners.
+				</p>
+			</footer>
 		</div>
 	);
 }
