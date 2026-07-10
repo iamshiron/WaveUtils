@@ -7,20 +7,22 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@shiron/ui/components/ui/select";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
 	calculateRollChance,
 	ECHO_SUBSTAT_SLOTS,
 	getSubstat,
 	SUBSTATS,
 	type SubstatId,
+	type SubstatRequirement,
 	substatValueChance,
 } from "@/lib/echoes";
 
-interface RequirementRow {
-	readonly substat: SubstatId;
-	/** Chosen threshold — always one of the substat's fixed roll values. */
-	readonly min: number;
+interface RollCalculatorProps {
+	/** Current requirements — the source of truth lives in the URL. */
+	readonly requirements: readonly SubstatRequirement[];
+	/** Called with the next requirement list whenever the user edits anything. */
+	readonly onChange: (requirements: readonly SubstatRequirement[]) => void;
 }
 
 function formatPercent(probability: number): string {
@@ -53,8 +55,8 @@ function formatValue(id: SubstatId, value: number): string {
 	return getSubstat(id).isPercent ? `${value}%` : `${value}`;
 }
 
-export function RollCalculator() {
-	const [rows, setRows] = useState<readonly RequirementRow[]>([]);
+export function RollCalculator({ requirements, onChange }: RollCalculatorProps) {
+	const rows = requirements;
 
 	const result = useMemo(() => calculateRollChance(rows), [rows]);
 
@@ -66,29 +68,27 @@ export function RollCalculator() {
 		if (!nextAvailable) {
 			return;
 		}
-		setRows((prev) => [
-			...prev,
+		onChange([
+			...rows,
 			{ substat: nextAvailable.id, min: nextAvailable.range.min },
 		]);
 	}
 
 	function removeRow(index: number) {
-		setRows((prev) => prev.filter((_, i) => i !== index));
+		onChange(rows.filter((_, i) => i !== index));
 	}
 
 	function changeSubstat(index: number, substat: SubstatId) {
 		const definition = getSubstat(substat);
-		setRows((prev) =>
-			prev.map((row, i) =>
+		onChange(
+			rows.map((row, i) =>
 				i === index ? { substat, min: definition.range.min } : row,
 			),
 		);
 	}
 
 	function changeMin(index: number, min: number) {
-		setRows((prev) =>
-			prev.map((row, i) => (i === index ? { ...row, min } : row)),
-		);
+		onChange(rows.map((row, i) => (i === index ? { ...row, min } : row)));
 	}
 
 	return (
