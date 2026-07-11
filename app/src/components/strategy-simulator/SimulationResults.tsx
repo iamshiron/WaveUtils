@@ -107,8 +107,9 @@ export function SimulationResults({ result }: { result: SimulationResult }) {
 							<span
 								className={savings >= 0 ? "text-primary" : "text-destructive"}
 							>
-								{savings >= 0 ? "saves " : "costs "}
-								{pct(Math.abs(savings))} vs. leveling everything
+								{savings >= 0
+									? `saves ${pct(savings)} vs. leveling everything`
+									: `costs ${pct(-savings)} more than leveling everything`}
 							</span>
 						</>
 					)}
