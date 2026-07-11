@@ -1,11 +1,11 @@
 import { Badge } from "@shiron/ui/components/ui/badge";
 import { Button } from "@shiron/ui/components/ui/button";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-} from "@shiron/ui/components/ui/select";
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@shiron/ui/components/ui/dropdown-menu";
 import { type Gate, getSubstat, SUBSTATS, type SubstatId } from "@/lib/echoes";
 import { gateToGroups, groupsToGate, type OrGroup } from "./gateGroups";
 
@@ -13,6 +13,43 @@ interface GateEditorProps {
 	readonly slot: number;
 	readonly gate: Gate | null;
 	readonly onChange: (gate: Gate | null) => void;
+}
+
+/** A "+ add" button that opens a dropdown of substats to pick from. */
+function AddStatMenu({
+	label,
+	options,
+	onPick,
+	variant = "ghost",
+}: {
+	label: string;
+	options: readonly { readonly id: SubstatId; readonly label: string }[];
+	onPick: (stat: SubstatId) => void;
+	variant?: "ghost" | "outline";
+}) {
+	if (options.length === 0) {
+		return null;
+	}
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant={variant}
+					size="sm"
+					className="h-7 gap-1 border-dashed px-2 text-xs text-muted-foreground"
+				>
+					{label}
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="start" className="max-h-64 overflow-y-auto">
+				{options.map((option) => (
+					<DropdownMenuItem key={option.id} onSelect={() => onPick(option.id)}>
+						{option.label}
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
 }
 
 /**
@@ -27,11 +64,8 @@ export function GateEditor({ slot, gate, onChange }: GateEditorProps) {
 		emit(groups.map((existing, i) => (i === index ? group : existing)));
 	}
 
-	function addGroup() {
-		const firstUnused =
-			SUBSTATS.find((s) => !groups.some((g) => g.anyOf.includes(s.id))) ??
-			SUBSTATS[0];
-		emit([...groups, { negate: false, anyOf: [firstUnused.id] }]);
+	function addGroup(stat: SubstatId) {
+		emit([...groups, { negate: false, anyOf: [stat] }]);
 	}
 
 	function removeGroup(index: number) {
@@ -112,28 +146,11 @@ export function GateEditor({ slot, gate, onChange }: GateEditorProps) {
 									</span>
 								))}
 
-								{available.length > 0 && (
-									<Select
-										value=""
-										onValueChange={(value) =>
-											addStat(index, value as SubstatId)
-										}
-									>
-										<SelectTrigger
-											className="h-7 w-auto gap-1 border-dashed px-2 text-xs"
-											aria-label="Add an OR option"
-										>
-											+ or
-										</SelectTrigger>
-										<SelectContent>
-											{available.map((substat) => (
-												<SelectItem key={substat.id} value={substat.id}>
-													{substat.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								)}
+								<AddStatMenu
+									label="+ or"
+									options={available}
+									onPick={(stat) => addStat(index, stat)}
+								/>
 
 								<Button
 									variant="ghost"
@@ -150,14 +167,13 @@ export function GateEditor({ slot, gate, onChange }: GateEditorProps) {
 				})}
 			</div>
 
-			<Button
-				variant="ghost"
-				size="sm"
-				className="mt-2 h-7 text-xs text-muted-foreground"
-				onClick={addGroup}
-			>
-				+ Require another stat (AND)
-			</Button>
+			<div className="mt-2">
+				<AddStatMenu
+					label="+ Require another stat (AND)"
+					options={SUBSTATS}
+					onPick={addGroup}
+				/>
+			</div>
 		</div>
 	);
 }
