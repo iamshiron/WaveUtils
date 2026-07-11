@@ -91,24 +91,41 @@ function Stat({
 	);
 }
 
-/** One confusion-matrix cell: a count plus a hover-explained caption. */
+/**
+ * One confusion-matrix cell: a count and share, tinted as a heatmap. "Win" cells
+ * (the diagonal) tint green, "mistake" cells (the off-diagonal) tint red, with
+ * the intensity scaled by the cell's share of all echoes.
+ */
 function MatrixCell({
 	value,
+	total,
 	caption,
 	info,
-	tone,
+	kind,
 }: {
 	value: number;
+	total: number;
 	caption: string;
 	info: string;
-	tone?: "good" | "bad";
+	kind: "good" | "mistake";
 }) {
-	const toneClass =
-		tone === "good" ? "text-primary" : tone === "bad" ? "text-destructive" : "";
+	const share = total > 0 ? value / total : 0;
+	// sqrt curve so small-but-notable shares still get a visible tint.
+	const intensity = Math.min(1, Math.sqrt(share));
+	const base = kind === "good" ? "var(--primary)" : "var(--destructive)";
+	const backgroundColor = `color-mix(in oklch, ${base} ${Math.round(
+		intensity * 35,
+	)}%, var(--card))`;
+	// More precision for small cells so they don't collapse to "0.0%".
+	const shareText =
+		total > 0 ? `${(share * 100).toFixed(share < 0.01 ? 2 : 1)}%` : "—";
 	return (
-		<div className="bg-card p-2 text-center">
-			<div className={`font-semibold tabular-nums ${toneClass}`}>
+		<div className="p-2 text-center" style={{ backgroundColor }}>
+			<div className="font-semibold tabular-nums">
 				{round(value)}
+				<span className="ml-1 text-xs font-normal text-muted-foreground">
+					{shareText}
+				</span>
 			</div>
 			<div className="text-[11px] text-muted-foreground">
 				<InfoTip text={info}>{caption}</InfoTip>
@@ -228,13 +245,16 @@ export function SimulationResults({ result }: { result: SimulationResult }) {
 					</div>
 					<MatrixCell
 						value={result.perfectKeeps}
+						total={result.samples}
 						caption="what you wanted"
-						tone="good"
+						kind="good"
 						info="Kept and perfect: the plan invested fully and got exactly the echo you were after."
 					/>
 					<MatrixCell
 						value={result.imperfectKeeps}
+						total={result.samples}
 						caption="too lenient — maxed a dud"
+						kind="mistake"
 						info="Kept but not perfect: leveled to 25 at full cost (no refund) even though it misses your target. A high count means your gates are too loose."
 					/>
 
@@ -243,13 +263,16 @@ export function SimulationResults({ result }: { result: SimulationResult }) {
 					</div>
 					<MatrixCell
 						value={result.perfectButDiscarded}
+						total={result.samples}
 						caption="too aggressive — threw away a winner"
-						tone="bad"
+						kind="mistake"
 						info="Discarded early, but its full roll would have been perfect. A high count means your gates are too strict and cull winners before they finish."
 					/>
 					<MatrixCell
 						value={result.correctDiscards}
+						total={result.samples}
 						caption="correct cull"
+						kind="good"
 						info="Discarded and would not have been perfect anyway — resources correctly saved."
 					/>
 				</div>
