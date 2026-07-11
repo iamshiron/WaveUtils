@@ -71,16 +71,14 @@ export function defaultStrategy(): LevelUpStrategy {
  * interesting variance lives.
  */
 export interface ResourceStats {
+	/** Number of perfect-echo acquisitions observed. */
+	readonly count: number;
 	/** Mean resources per perfect echo. */
 	readonly avg: ResourceVector;
-	/** Cheapest observed acquisition (a lucky streak). */
+	/** Cheapest observed acquisition — a lucky streak (by Echo EXP). */
 	readonly min: ResourceVector;
-	/** Most expensive observed acquisition (an unlucky streak). */
+	/** Most expensive observed acquisition — an unlucky streak (by Echo EXP). */
 	readonly max: ResourceVector;
-	/** Median acquisition cost. */
-	readonly p50: ResourceVector;
-	/** 90th-percentile acquisition cost. */
-	readonly p90: ResourceVector;
 }
 
 /** One bar of the acquisition-cost histogram (bucketed on Echo EXP). */
