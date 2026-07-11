@@ -29,6 +29,9 @@ export function AppShell({
 							<Button variant="ghost" size="sm" asChild>
 								<Link to="/roll-calculator">Roll Calculator</Link>
 							</Button>
+							<Button variant="ghost" size="sm" asChild>
+								<Link to="/strategy-simulator">Strategy Simulator</Link>
+							</Button>
 						</div>
 					</nav>
 					<div className="flex items-center gap-1 justify-self-end">

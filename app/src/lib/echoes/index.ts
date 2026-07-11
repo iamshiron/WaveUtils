@@ -6,5 +6,6 @@ export * from "./prng";
 export * from "./rollChance";
 export * from "./simulate";
 export * from "./strategy";
+export * from "./strategyPermalink";
 export * from "./substats";
 export * from "./workerPool";

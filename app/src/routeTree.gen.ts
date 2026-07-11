@@ -9,9 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StrategySimulatorRouteImport } from './routes/strategy-simulator'
 import { Route as RollCalculatorRouteImport } from './routes/roll-calculator'
 import { Route as IndexRouteImport } from './routes/index'
 
+const StrategySimulatorRoute = StrategySimulatorRouteImport.update({
+  id: '/strategy-simulator',
+  path: '/strategy-simulator',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RollCalculatorRoute = RollCalculatorRouteImport.update({
   id: '/roll-calculator',
   path: '/roll-calculator',
@@ -26,31 +32,42 @@ const IndexRoute = IndexRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/roll-calculator': typeof RollCalculatorRoute
+  '/strategy-simulator': typeof StrategySimulatorRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/roll-calculator': typeof RollCalculatorRoute
+  '/strategy-simulator': typeof StrategySimulatorRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/roll-calculator': typeof RollCalculatorRoute
+  '/strategy-simulator': typeof StrategySimulatorRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/roll-calculator'
+  fullPaths: '/' | '/roll-calculator' | '/strategy-simulator'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/roll-calculator'
-  id: '__root__' | '/' | '/roll-calculator'
+  to: '/' | '/roll-calculator' | '/strategy-simulator'
+  id: '__root__' | '/' | '/roll-calculator' | '/strategy-simulator'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   RollCalculatorRoute: typeof RollCalculatorRoute
+  StrategySimulatorRoute: typeof StrategySimulatorRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/strategy-simulator': {
+      id: '/strategy-simulator'
+      path: '/strategy-simulator'
+      fullPath: '/strategy-simulator'
+      preLoaderRoute: typeof StrategySimulatorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/roll-calculator': {
       id: '/roll-calculator'
       path: '/roll-calculator'
@@ -71,6 +88,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   RollCalculatorRoute: RollCalculatorRoute,
+  StrategySimulatorRoute: StrategySimulatorRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
