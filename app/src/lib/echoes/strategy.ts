@@ -89,6 +89,24 @@ export interface HistogramBin {
 }
 
 /**
+ * The marginal effect of removing one slot's gate (making it always-keep). Lets
+ * the user see, per gate, what relaxing it would recover and what it would cost —
+ * the direct answer to "which gate should I loosen?".
+ */
+export interface GateSensitivity {
+	/** Whether this slot has a gate at all (relaxing a `null` gate is a no-op). */
+	readonly hasGate: boolean;
+	/** Perfect echoes that would now be kept if this gate were removed. */
+	readonly recoversPerfect: number;
+	/** Duds that would now be leveled to completion if this gate were removed. */
+	readonly addsImperfect: number;
+	/** Total extra echoes kept (`recoversPerfect + addsImperfect`). */
+	readonly newKeeps: number;
+	/** Extra net resources spent across the run if this gate were removed. */
+	readonly addedNet: ResourceVector;
+}
+
+/**
  * Aggregate outcome of a Monte-Carlo run. Every field is a mergeable partial
  * (sums, mins, maxes, per-stage counts, histogram bins) so worker results
  * combine by simple addition.
@@ -105,6 +123,14 @@ export interface SimulationResult {
 	readonly discarded: number;
 	/** How many were culled at each slot (index 0 = slot 1). Length {@link STRATEGY_SLOTS}. */
 	readonly discardsByStage: readonly number[];
+	/** How many echoes paid to reveal each slot (index 0 = slot 1, always `samples`). */
+	readonly reachedByStage: readonly number[];
+	/** Discards at each slot whose full roll WOULD have been perfect — winners killed. */
+	readonly perfectDiscardsByStage: readonly number[];
+	/** Net resources sunk into the discards at each slot (after refunds). */
+	readonly wastedByStage: readonly ResourceVector[];
+	/** Per-slot effect of removing that gate — the relax-this-gate optimizer aid. */
+	readonly gateSensitivity: readonly GateSensitivity[];
 	/** Average slot an echo reached before it was kept or discarded. */
 	readonly avgStageReached: number;
 

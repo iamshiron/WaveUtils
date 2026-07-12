@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { evalGate, runEcho } from "./evaluateStrategy";
+import { evalGate, gateSubstats, runEcho } from "./evaluateStrategy";
 import { cumulativeCostToStage, refund } from "./levelCosts";
 import type { SubstatRequirement } from "./rollChance";
 import type { Echo, RolledSubstat } from "./simulate";
@@ -158,5 +158,53 @@ describe("runEcho", () => {
 		const result = runEcho(noGates, echo(sub("def", 40), sub("hp", 320)));
 		expect(result.kept).toBe(true);
 		expect(result.isPerfect).toBe(true); // empty target ⇒ everything is "perfect"
+	});
+});
+
+describe("runEcho counterfactual (skipStage)", () => {
+	// Discarded at slot 1 (atkPercent first, no crit), but the full roll is perfect.
+	const perfectDiscard = echo(
+		sub("atkPercent", 7.9),
+		sub("critRate", 8.1),
+		sub("critDmg", 16.2),
+		sub("hp", 470),
+		sub("def", 60),
+	);
+
+	it("bypasses only the skipped gate; downstream gates still apply", () => {
+		// Skipping gate 0 lets it continue; gates 2 and 4 still pass here → kept.
+		const relaxed = runEcho(STRATEGY, perfectDiscard, 0);
+		expect(relaxed.kept).toBe(true);
+		expect(relaxed.stageReached).toBe(5);
+		expect(relaxed.net).toEqual(cumulativeCostToStage(5));
+	});
+
+	it("added net cost equals full net minus the discard's net", () => {
+		const base = runEcho(STRATEGY, perfectDiscard);
+		const relaxed = runEcho(STRATEGY, perfectDiscard, 0);
+		const addedExp = relaxed.net.echoExp - base.net.echoExp;
+		expect(addedExp).toBe(
+			cumulativeCostToStage(5).echoExp - base.net.echoExp,
+		);
+		expect(addedExp).toBeGreaterThan(0);
+	});
+
+	it("skipping a gate the echo never reached changes nothing", () => {
+		const base = runEcho(STRATEGY, perfectDiscard); // dies at slot 1
+		const skipLater = runEcho(STRATEGY, perfectDiscard, 4);
+		expect(skipLater).toEqual(base);
+	});
+});
+
+describe("gateSubstats", () => {
+	it("collects every present-leaf substat across the tree", () => {
+		const gate = and(
+			present("critRate"),
+			or(present("critDmg"), present("atkPercent")),
+			{ kind: "not", condition: present("hp") },
+		);
+		expect(gateSubstats(gate)).toEqual(
+			new Set<SubstatId>(["critRate", "critDmg", "atkPercent", "hp"]),
+		);
 	});
 });

@@ -45,6 +45,30 @@ export function evalGate(
 	}
 }
 
+/** Collects every substat referenced by a `present` leaf anywhere in a gate. */
+export function gateSubstats(
+	gate: Gate,
+	into: Set<SubstatId> = new Set(),
+): Set<SubstatId> {
+	switch (gate.kind) {
+		case "present":
+			into.add(gate.substat);
+			return into;
+		case "and":
+		case "or":
+			for (const child of gate.conditions) {
+				gateSubstats(child, into);
+			}
+			return into;
+		case "not":
+			return gateSubstats(gate.condition, into);
+		default: {
+			const exhaustive: never = gate;
+			return exhaustive;
+		}
+	}
+}
+
 /** Result of running one echo through a strategy. */
 export interface EchoOutcome {
 	/** True if the echo passed every gate (leveled all the way to completion). */
@@ -65,8 +89,16 @@ export interface EchoOutcome {
  * Replays a strategy over a pre-rolled echo. The echo is generated in full up
  * front (so `isPerfect` always reflects the true finished echo); the gates only
  * ever see the slots revealed up to their point in the timeline.
+ *
+ * `skipStage` (default `-1`) treats the gate at that slot as always-pass — used
+ * to compute the "what if I removed this one gate" counterfactual without
+ * mutating the strategy.
  */
-export function runEcho(strategy: LevelUpStrategy, echo: Echo): EchoOutcome {
+export function runEcho(
+	strategy: LevelUpStrategy,
+	echo: Echo,
+	skipStage = -1,
+): EchoOutcome {
 	const slots = echo.substats;
 	const stageCount = Math.min(STRATEGY_SLOTS, slots.length);
 	const revealed = new Set<SubstatId>();
@@ -81,7 +113,7 @@ export function runEcho(strategy: LevelUpStrategy, echo: Echo): EchoOutcome {
 		revealed.add(slots[stage].substat);
 		stageReached = stage + 1;
 
-		const gate = strategy.gates[stage];
+		const gate = stage === skipStage ? null : strategy.gates[stage];
 		if (gate && !evalGate(gate, revealed)) {
 			kept = false;
 			break;

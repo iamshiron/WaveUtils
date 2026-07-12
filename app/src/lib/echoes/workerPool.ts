@@ -79,7 +79,7 @@ export function runInline(
 		completed += chunk.samples;
 		return partial;
 	});
-	return finalize(mergePartials(partials));
+	return finalize(mergePartials(partials), strategy);
 }
 
 /** Runs the simulation across Web Workers. Rejects with `AbortError` if cancelled. */
@@ -140,7 +140,7 @@ export function runWithWorkers(
 					remaining--;
 					if (remaining === 0 && !settled) {
 						settled = true;
-						resolve(finalize(mergePartials(partials)));
+						resolve(finalize(mergePartials(partials), strategy));
 					}
 				}
 			};

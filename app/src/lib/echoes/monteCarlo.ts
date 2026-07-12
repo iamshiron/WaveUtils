@@ -14,11 +14,15 @@ import {
 	addResources,
 	cumulativeCostToStage,
 	ECHO_MAX_STAGE,
+	refund,
+	scaleResources,
+	subResources,
 	ZERO_RESOURCES,
 } from "./levelCosts";
 import { mulberry32 } from "./prng";
 import { type RandomSource, rollEcho } from "./simulate";
 import {
+	type GateSensitivity,
 	type HistogramBin,
 	type LevelUpStrategy,
 	type ResourceStats,
@@ -38,6 +42,10 @@ export interface PartialResult {
 	kept: number;
 	discarded: number;
 	discardsByStage: number[];
+	/** Echoes that reached (paid to reveal) each slot. */
+	reachedByStage: number[];
+	/** Discards at each slot whose full roll would have been perfect. */
+	perfectDiscardsByStage: number[];
 	stageReachedSum: number;
 	gross: ResourceVector;
 	net: ResourceVector;
@@ -47,6 +55,13 @@ export interface PartialResult {
 	correctDiscards: number;
 	/** Echoes whose full roll meets the target (independent of keep/discard). */
 	perfectTotal: number;
+	// Per-slot "remove this gate" counterfactual tallies (relax sensitivity).
+	/** Echoes discarded at slot `i` that would be kept if gate `i` were removed. */
+	relaxNewKeeps: number[];
+	/** Of `relaxNewKeeps`, how many are perfect. */
+	relaxNewPerfect: number[];
+	/** Extra net resources from letting slot-`i` discards continue past a removed gate. */
+	relaxAddedNet: ResourceVector[];
 	// Acquisition-cost distribution over COMPLETED acquisitions only.
 	acqCount: number;
 	acqSum: ResourceVector;
@@ -62,6 +77,8 @@ export function emptyPartial(): PartialResult {
 		kept: 0,
 		discarded: 0,
 		discardsByStage: Array.from({ length: STRATEGY_SLOTS }, () => 0),
+		reachedByStage: Array.from({ length: STRATEGY_SLOTS }, () => 0),
+		perfectDiscardsByStage: Array.from({ length: STRATEGY_SLOTS }, () => 0),
 		stageReachedSum: 0,
 		gross: ZERO_RESOURCES,
 		net: ZERO_RESOURCES,
@@ -70,6 +87,9 @@ export function emptyPartial(): PartialResult {
 		perfectButDiscarded: 0,
 		correctDiscards: 0,
 		perfectTotal: 0,
+		relaxNewKeeps: Array.from({ length: STRATEGY_SLOTS }, () => 0),
+		relaxNewPerfect: Array.from({ length: STRATEGY_SLOTS }, () => 0),
+		relaxAddedNet: Array.from({ length: STRATEGY_SLOTS }, () => ZERO_RESOURCES),
 		acqCount: 0,
 		acqSum: ZERO_RESOURCES,
 		acqMin: { echoExp: Number.POSITIVE_INFINITY, tuners: 0, shellCredit: 0 },
@@ -109,12 +129,17 @@ export function accumulate(
 	let pending = ZERO_RESOURCES; // net spend since the last perfect keep
 
 	for (let i = 0; i < samples; i++) {
-		const outcome = runEcho(strategy, rollEcho({ rng }));
+		const echo = rollEcho({ rng });
+		const outcome = runEcho(strategy, echo);
 
 		partial.samples++;
 		partial.gross = addResources(partial.gross, outcome.spent);
 		partial.net = addResources(partial.net, outcome.net);
 		partial.stageReachedSum += outcome.stageReached;
+		// An echo that reached slot `stageReached` paid to reveal slots 1..stageReached.
+		for (let s = 0; s < outcome.stageReached; s++) {
+			partial.reachedByStage[s]++;
+		}
 		if (outcome.isPerfect) {
 			partial.perfectTotal++;
 		}
@@ -127,13 +152,29 @@ export function accumulate(
 				partial.imperfectKeeps++;
 			}
 		} else {
+			const d = outcome.stageReached - 1;
 			partial.discarded++;
-			partial.discardsByStage[outcome.stageReached - 1]++;
+			partial.discardsByStage[d]++;
 			if (outcome.isPerfect) {
 				partial.perfectButDiscarded++;
+				partial.perfectDiscardsByStage[d]++;
 			} else {
 				partial.correctDiscards++;
 			}
+			// Counterfactual: removing gate `d` only changes echoes culled AT slot `d`
+			// (earlier gates passed; later gates were never reached), so one replay
+			// with that gate skipped gives the full "relax this gate" impact.
+			const relaxed = runEcho(strategy, echo, d);
+			if (relaxed.kept) {
+				partial.relaxNewKeeps[d]++;
+				if (outcome.isPerfect) {
+					partial.relaxNewPerfect[d]++;
+				}
+			}
+			partial.relaxAddedNet[d] = addResources(
+				partial.relaxAddedNet[d],
+				subResources(relaxed.net, outcome.net),
+			);
 		}
 
 		pending = addResources(pending, outcome.net);
@@ -158,6 +199,11 @@ export function mergeInto(a: PartialResult, b: PartialResult): PartialResult {
 	a.discarded += b.discarded;
 	for (let i = 0; i < a.discardsByStage.length; i++) {
 		a.discardsByStage[i] += b.discardsByStage[i];
+		a.reachedByStage[i] += b.reachedByStage[i];
+		a.perfectDiscardsByStage[i] += b.perfectDiscardsByStage[i];
+		a.relaxNewKeeps[i] += b.relaxNewKeeps[i];
+		a.relaxNewPerfect[i] += b.relaxNewPerfect[i];
+		a.relaxAddedNet[i] = addResources(a.relaxAddedNet[i], b.relaxAddedNet[i]);
 	}
 	a.stageReachedSum += b.stageReachedSum;
 	a.gross = addResources(a.gross, b.gross);
@@ -203,8 +249,17 @@ function divide(v: ResourceVector, n: number): ResourceVector {
 	};
 }
 
+/** Net resources lost when an echo is discarded after reaching `stage` slots. */
+function discardNetToStage(stage: number): ResourceVector {
+	const spent = cumulativeCostToStage(stage);
+	return subResources(spent, refund(spent));
+}
+
 /** Derives the final, display-ready result from a merged partial. */
-export function finalize(partial: PartialResult): SimulationResult {
+export function finalize(
+	partial: PartialResult,
+	strategy: LevelUpStrategy,
+): SimulationResult {
 	const { samples, perfectKeeps, perfectTotal, acqCount } = partial;
 	const fullCost = cumulativeCostToStage(ECHO_MAX_STAGE);
 
@@ -219,12 +274,32 @@ export function finalize(partial: PartialResult): SimulationResult {
 		(count, index) => ({ bucket: index * FULL_ECHO_EXP, count }),
 	);
 
+	// A discard at slot i (i+1 tunings paid) loses a fixed net amount, so the
+	// resources wasted there are just the discard count times that unit cost.
+	const wastedByStage: ResourceVector[] = partial.discardsByStage.map(
+		(count, index) => scaleResources(discardNetToStage(index + 1), count),
+	);
+
+	const gateSensitivity: GateSensitivity[] = partial.relaxNewKeeps.map(
+		(newKeeps, index) => ({
+			hasGate: strategy.gates[index] != null,
+			recoversPerfect: partial.relaxNewPerfect[index],
+			addsImperfect: newKeeps - partial.relaxNewPerfect[index],
+			newKeeps,
+			addedNet: partial.relaxAddedNet[index],
+		}),
+	);
+
 	return {
 		samples,
 		kept: partial.kept,
 		keptRate: samples > 0 ? partial.kept / samples : 0,
 		discarded: partial.discarded,
 		discardsByStage: partial.discardsByStage.slice(),
+		reachedByStage: partial.reachedByStage.slice(),
+		perfectDiscardsByStage: partial.perfectDiscardsByStage.slice(),
+		wastedByStage,
+		gateSensitivity,
 		avgStageReached: samples > 0 ? partial.stageReachedSum / samples : 0,
 		grossCost: partial.gross,
 		netCost: partial.net,
@@ -259,5 +334,5 @@ export function simulate(
 	samples: number,
 	seed = 1,
 ): SimulationResult {
-	return finalize(accumulate(strategy, samples, mulberry32(seed)));
+	return finalize(accumulate(strategy, samples, mulberry32(seed)), strategy);
 }
