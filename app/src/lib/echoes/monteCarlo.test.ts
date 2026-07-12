@@ -204,7 +204,9 @@ describe("gate sensitivity", () => {
 		};
 		const r = simulate(multiGate, 8000, 21);
 		r.gateSensitivity.forEach((s, i) => {
-			expect(s.recoversPerfect).toBeLessThanOrEqual(r.perfectDiscardsByStage[i]);
+			expect(s.recoversPerfect).toBeLessThanOrEqual(
+				r.perfectDiscardsByStage[i],
+			);
 		});
 	});
 });

@@ -183,9 +183,7 @@ describe("runEcho counterfactual (skipStage)", () => {
 		const base = runEcho(STRATEGY, perfectDiscard);
 		const relaxed = runEcho(STRATEGY, perfectDiscard, 0);
 		const addedExp = relaxed.net.echoExp - base.net.echoExp;
-		expect(addedExp).toBe(
-			cumulativeCostToStage(5).echoExp - base.net.echoExp,
-		);
+		expect(addedExp).toBe(cumulativeCostToStage(5).echoExp - base.net.echoExp);
 		expect(addedExp).toBeGreaterThan(0);
 	});
 

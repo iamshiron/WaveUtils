@@ -1,3 +1,4 @@
+import { Badge } from "@shiron/ui/components/ui/badge";
 import { Card } from "@shiron/ui/components/ui/card";
 import {
 	Tooltip,
@@ -14,7 +15,15 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
-import type { ResourceVector, SimulationResult } from "@/lib/echoes";
+import {
+	calculateRollChance,
+	gateSubstats,
+	getSubstat,
+	type LevelUpStrategy,
+	type ResourceVector,
+	type SimulationResult,
+	type SubstatId,
+} from "@/lib/echoes";
 
 const FULL_ECHO_EXP = 142600;
 
@@ -28,6 +37,19 @@ function round(n: number): string {
 
 function pct(fraction: number): string {
 	return `${(fraction * 100).toFixed(1)}%`;
+}
+
+/** Compact Echo-EXP readout: 1.2M / 340k / 820. */
+function compactExp(n: number): string {
+	if (!Number.isFinite(n)) return "—";
+	if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+	if (Math.abs(n) >= 1_000) return `${Math.round(n / 1_000)}k`;
+	return String(Math.round(n));
+}
+
+/** Formats a desired-stat threshold, appending "%" for percent substats. */
+function formatValue(substat: SubstatId, value: number): string {
+	return getSubstat(substat).isPercent ? `${value}%` : String(value);
 }
 
 /** A label with a dotted underline that reveals an explanation on hover. */
@@ -134,10 +156,209 @@ function MatrixCell({
 	);
 }
 
-export function SimulationResults({ result }: { result: SimulationResult }) {
+/**
+ * Per-slot attribution table: where the plan culls, which culls threw away
+ * winners, the resources sunk there, and what relaxing each gate would do. This
+ * is where a global "too aggressive" verdict gets pinned to a specific gate.
+ */
+function GateBreakdown({ result }: { result: SimulationResult }) {
+	return (
+		<Card className="p-4">
+			<div className="mb-2 text-sm font-semibold">
+				<InfoTip text="Breaks the plan down gate by gate. 'Winners killed' are discards whose full roll would have been perfect; 'Relax gate' shows what removing that one gate would recover and what it would add in cost. Use it to find the single gate to loosen or tighten.">
+					Per-slot gate breakdown
+				</InfoTip>
+			</div>
+			<div className="overflow-x-auto">
+				<table className="w-full text-sm">
+					<thead>
+						<tr className="text-left text-xs text-muted-foreground">
+							<th className="py-1 pr-3 font-medium">Slot</th>
+							<th className="py-1 pr-3 font-medium">Reached</th>
+							<th className="py-1 pr-3 font-medium">Discarded</th>
+							<th className="py-1 pr-3 font-medium">
+								<InfoTip text="Discards at this slot whose finished echo would have met your target — winners the gate threw away.">
+									Winners killed
+								</InfoTip>
+							</th>
+							<th className="py-1 pr-3 font-medium">
+								<InfoTip text="Net resources (after refunds) sunk into every echo discarded at this slot. Later slots cost far more — the EXP curve is steep.">
+									Wasted here
+								</InfoTip>
+							</th>
+							<th className="py-1 font-medium">
+								<InfoTip text="What removing this gate would do: how many more perfect echoes you'd keep, how many more duds you'd fully level, and the extra net resources spent.">
+									Relax gate
+								</InfoTip>
+							</th>
+						</tr>
+					</thead>
+					<tbody className="tabular-nums">
+						{result.discardsByStage.map((discarded, i) => {
+							const reached = result.reachedByStage[i];
+							const winners = result.perfectDiscardsByStage[i];
+							const cullRate = reached > 0 ? discarded / reached : 0;
+							const sens = result.gateSensitivity[i];
+							return (
+								<tr
+									// biome-ignore lint/suspicious/noArrayIndexKey: fixed 5 slots
+									key={i}
+									className="border-t border-border/60"
+								>
+									<td className="py-1.5 pr-3 font-medium">{i + 1}</td>
+									<td className="py-1.5 pr-3 text-muted-foreground">
+										{round(reached)}
+									</td>
+									<td className="py-1.5 pr-3">
+										{round(discarded)}
+										<span className="ml-1 text-xs text-muted-foreground">
+											{pct(cullRate)}
+										</span>
+									</td>
+									<td
+										className={`py-1.5 pr-3 ${winners > 0 ? "text-destructive" : "text-muted-foreground"}`}
+									>
+										{round(winners)}
+									</td>
+									<td className="py-1.5 pr-3">
+										<InfoTip
+											text={`${round(result.wastedByStage[i].echoExp)} EXP · ${round(result.wastedByStage[i].tuners)} Tuners · ${round(result.wastedByStage[i].shellCredit)} Shell`}
+										>
+											{compactExp(result.wastedByStage[i].echoExp)}
+										</InfoTip>
+									</td>
+									<td className="py-1.5">
+										{!sens.hasGate ? (
+											<span className="text-muted-foreground">no gate</span>
+										) : sens.newKeeps === 0 ? (
+											<span className="text-muted-foreground">no effect</span>
+										) : (
+											<span className="flex flex-wrap items-center gap-x-2 text-xs">
+												<span className="text-primary">
+													+{round(sens.recoversPerfect)} perfect
+												</span>
+												<span className="text-destructive">
+													+{round(sens.addsImperfect)} duds
+												</span>
+												<InfoTip
+													text={`Extra net spend if removed: ${round(sens.addedNet.echoExp)} EXP · ${round(sens.addedNet.tuners)} Tuners · ${round(sens.addedNet.shellCredit)} Shell`}
+												>
+													+{compactExp(sens.addedNet.echoExp)} EXP
+												</InfoTip>
+											</span>
+										)}
+									</td>
+								</tr>
+							);
+						})}
+					</tbody>
+				</table>
+			</div>
+		</Card>
+	);
+}
+
+/**
+ * Analytic (no-sim) panel: each desired stat's standalone chance of landing on a
+ * finished echo, plus whether any gate actually checks for it. Explains a low
+ * perfect rate that no gate change can fix — the target itself is the bottleneck.
+ */
+function TargetDifficulty({
+	result,
+	strategy,
+}: {
+	result: SimulationResult;
+	strategy: LevelUpStrategy;
+}) {
+	if (strategy.target.length === 0) {
+		return null;
+	}
+
+	const gatedStats = new Set<SubstatId>();
+	for (const gate of strategy.gates) {
+		if (gate) gateSubstats(gate, gatedStats);
+	}
+
+	const rows = strategy.target
+		.map((req) => ({
+			req,
+			chance: calculateRollChance([req]).probability,
+			gated: gatedStats.has(req.substat),
+		}))
+		// Hardest first — the bottleneck sits at the top.
+		.sort((a, b) => a.chance - b.chance);
+	const maxChance = Math.max(...rows.map((r) => r.chance), 1e-9);
+	const combined = calculateRollChance(strategy.target).probability;
+
+	return (
+		<Card className="p-4">
+			<div className="mb-1 text-sm font-semibold">
+				<InfoTip text="How hard each desired stat is to roll on its own (its type appearing AND meeting your minimum), independent of your gates. The lowest bar is your bottleneck — no gate change can push the perfect rate above what the roll table allows.">
+					Target difficulty & coverage
+				</InfoTip>
+			</div>
+			<div className="mb-3 text-xs text-muted-foreground">
+				Combined perfect chance{" "}
+				<span className="font-medium text-foreground tabular-nums">
+					{pct(combined)}
+				</span>{" "}
+				— the baseline perfect rate ({pct(result.baselinePerfectRate)}) any plan
+				is capped by.
+			</div>
+			<div className="space-y-2">
+				{rows.map(({ req, chance, gated }) => (
+					<div
+						key={`${req.substat}-${req.min}`}
+						className="flex items-center gap-3"
+					>
+						<div className="w-40 shrink-0 truncate text-xs">
+							{getSubstat(req.substat).label}
+							<span className="text-muted-foreground">
+								{" ≥ "}
+								{formatValue(req.substat, req.min)}
+							</span>
+						</div>
+						<div className="relative h-3 flex-1 overflow-hidden rounded bg-muted">
+							<div
+								className="h-full rounded bg-primary"
+								style={{ width: `${(chance / maxChance) * 100}%` }}
+							/>
+						</div>
+						<div className="w-12 shrink-0 text-right text-xs tabular-nums">
+							{pct(chance)}
+						</div>
+						<Badge
+							variant={gated ? "secondary" : "outline"}
+							className={
+								gated
+									? "shrink-0"
+									: "shrink-0 border-destructive/50 text-destructive"
+							}
+						>
+							{gated ? "gated" : "not gated"}
+						</Badge>
+					</div>
+				))}
+			</div>
+			<p className="mt-3 text-[11px] text-muted-foreground">
+				“Not gated” means no gate ever requires this stat, so echoes missing it
+				are still leveled to completion — a source of maxed duds.
+			</p>
+		</Card>
+	);
+}
+
+export function SimulationResults({
+	result,
+	strategy,
+}: {
+	result: SimulationResult;
+	strategy: LevelUpStrategy;
+}) {
 	const discardData = result.discardsByStage.map((count, index) => ({
 		slot: `Slot ${index + 1}`,
-		count,
+		winners: result.perfectDiscardsByStage[index],
+		culls: count - result.perfectDiscardsByStage[index],
 	}));
 
 	// Trim trailing empty histogram bins for a tidy chart.
@@ -278,6 +499,12 @@ export function SimulationResults({ result }: { result: SimulationResult }) {
 				</div>
 			</Card>
 
+			{/* Per-slot gate breakdown — the "which gate is the problem" table */}
+			<GateBreakdown result={result} />
+
+			{/* Target difficulty & coverage — analytic, no sim */}
+			<TargetDifficulty result={result} strategy={strategy} />
+
 			{/* Cost distribution */}
 			<Card className="grid gap-4 p-4 sm:grid-cols-3">
 				<Stat
@@ -307,9 +534,19 @@ export function SimulationResults({ result }: { result: SimulationResult }) {
 			<div className="grid gap-4 lg:grid-cols-2">
 				<Card className="p-4">
 					<div className="mb-2 text-sm font-semibold">
-						<InfoTip text="How many echoes the plan discarded at each slot. Culling at earlier slots is far cheaper — the EXP curve is steep, so a slot-1 discard costs a tiny fraction of a slot-5 one.">
+						<InfoTip text="How many echoes the plan discarded at each slot, split into correct culls (would not have been perfect) and winners killed (would have been perfect). A tall red segment marks an over-aggressive gate. Culling early is far cheaper — the EXP curve is steep.">
 							Where the plan discards
 						</InfoTip>
+					</div>
+					<div className="mb-2 flex gap-4 text-[11px] text-muted-foreground">
+						<span className="flex items-center gap-1">
+							<span className="inline-block size-2 rounded-sm bg-primary" />
+							correct culls
+						</span>
+						<span className="flex items-center gap-1">
+							<span className="inline-block size-2 rounded-sm bg-destructive" />
+							winners killed
+						</span>
 					</div>
 					<div className="h-48">
 						<ResponsiveContainer width="100%" height="100%">
@@ -330,10 +567,12 @@ export function SimulationResults({ result }: { result: SimulationResult }) {
 										fontSize: 12,
 									}}
 								/>
+								<Bar dataKey="culls" stackId="discards" fill="var(--primary)" />
 								<Bar
-									dataKey="count"
+									dataKey="winners"
+									stackId="discards"
 									radius={[4, 4, 0, 0]}
-									fill="var(--primary)"
+									fill="var(--destructive)"
 								/>
 							</BarChart>
 						</ResponsiveContainer>

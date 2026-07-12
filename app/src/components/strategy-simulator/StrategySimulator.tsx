@@ -34,7 +34,12 @@ export function StrategySimulator({
 	const [samples, setSamples] = useState<number>(5000);
 	const [running, setRunning] = useState(false);
 	const [progress, setProgress] = useState(0);
-	const [result, setResult] = useState<SimulationResult | null>(null);
+	// Snapshot the strategy that produced the result, so the diagnostics stay in
+	// sync with the numbers even if the user keeps editing gates afterwards.
+	const [result, setResult] = useState<{
+		result: SimulationResult;
+		strategy: LevelUpStrategy;
+	} | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const abortRef = useRef<AbortController | null>(null);
 
@@ -65,7 +70,7 @@ export function StrategySimulator({
 				onProgress: setProgress,
 				signal: controller.signal,
 			});
-			setResult(next);
+			setResult({ result: next, strategy });
 		} catch (caught) {
 			if (!(caught instanceof DOMException && caught.name === "AbortError")) {
 				setError(caught instanceof Error ? caught.message : String(caught));
@@ -142,7 +147,9 @@ export function StrategySimulator({
 				)}
 			</section>
 
-			{result && <SimulationResults result={result} />}
+			{result && (
+				<SimulationResults result={result.result} strategy={result.strategy} />
+			)}
 		</div>
 	);
 }

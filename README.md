@@ -30,7 +30,9 @@ Test a keep/discard rule for leveling echoes and see what it actually costs — 
 - **Cost per perfect echo** — on average, how many Tuners, how much EXP and how much Shell Credit you'll burn to land *one* echo that hits all your wanted stats while following your rules. This is the number to minimize.
 - **Too strict vs. too loose** — a simple grid splits every echo into four buckets: *got what you wanted*, *wasted a full level-up on a dud* (your rules were too loose), *threw away an echo that would've been perfect* (too strict), and *correctly tossed junk*. If the "threw away a winner" cell is glowing red, ease up your early rules; if "maxed a dud" is red, tighten them.
 - **Vs. just maxing everything** — how much your plan saves (or wastes) compared to never discarding anything, so you can tell whether the rules are even worth it.
-- **Where you discard** — which slot your rules usually bail at. Bailing earlier is much cheaper, since the EXP cost per level snowballs toward 25.
+- **Where you discard** — which slot your rules usually bail at, split into *correct culls* and *winners killed* (echoes tossed that would've finished perfect). Bailing earlier is much cheaper, since the EXP cost per level snowballs toward 25.
+- **Which rule is the problem** — a gate-by-gate table pins the blame on a specific slot: how many echoes each rule tosses, how many of those were winners, the resources it burns, and — crucially — what *removing that one rule* would recover and what it would cost. This is where you find the single rule to loosen.
+- **Is it even possible?** — a difficulty breakdown of your wanted stats shows how rare each one is on its own, so you can tell when a low success rate is your rules' fault versus just an unrealistic wishlist. It also flags any wanted stat that *no rule ever checks for* — a quiet source of maxed duds.
 
 Tweak a rule, run it again, watch the cost drop. Everything runs right in your browser (spread across your CPU cores, so even 100,000 echoes finish in a moment) — nothing is uploaded.
 
